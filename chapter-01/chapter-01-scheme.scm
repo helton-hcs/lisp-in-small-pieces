@@ -2,6 +2,9 @@
 
 (require r5rs)
 
+;-------------------------
+; Evaluator
+;-------------------------
 (define (evaluate exp env)
   (if (atom? exp)
       (cond ((symbol? exp)
@@ -124,19 +127,108 @@
 (defprimitive display display 1)
 
 
-(define (chapter01-scheme)
+(define (repl)
   (define (toplevel)
     (begin
       (display "scheme> ")
       (let ((expression (read)))
         (if (or (equal? 'quit expression)
                 (equal? 'exit expression))
-            (display "Bye!")
-            (begin
+            (display "Exiting...")
+            (let ((result (evaluate expression env.global)))
               (display "=> ")
-              (display (evaluate expression env.global))
-              (newline)
+              (displayln result)
               (toplevel))))))
   (toplevel))
 
-(chapter01-scheme)
+;-------------------------
+; Exercise 1.1
+;-------------------------
+(define (invoke-trace fn args)
+  (define (procedure-name proc env)
+    (if (pair? env)
+        (if (eq? (cdar env) proc)
+            (caar env)
+            (procedure-name proc (cdr env)))
+        (wrong "No procedure found of " proc)))
+  (if (procedure? fn)
+      (begin
+        (display "[Trace] Calling..: ")
+        (display (cons (procedure-name fn env.global) args))
+        (newline)
+        (let ((result (fn args)))
+          (display "[Trace] Returning: ")
+          (display (cons (procedure-name fn env.global) args))
+          (display " = ")
+          (display result)        
+          (newline)
+          result))
+      (wrong "Not a function" fn)))
+
+; Pluging in...
+(define old-invoke invoke)
+(set! invoke invoke-trace)
+
+; Undo
+(set! invoke old-invoke)
+
+;-------------------------
+; Exercise 1.2
+;-------------------------
+(define (evlis-no-recursive-to-1-expression exps env)
+  (define (evlis-no-recursive-to-1-expression exps)
+    (if (pair? (cdr exps))
+        (cons (evaluate (car exps) env)
+              (evlis-no-recursive-to-1-expression (cdr exps)))
+        (list (evaluate (car exps) env))))
+  (if (pair? exps)
+      (evlis-no-recursive-to-1-expression exps)
+      '()))
+ 
+; Pluging in...
+(define old-evlis evlis)
+(set! evlis evlis-no-recursive-to-1-expression)
+
+; Undo
+(set! evlis old-evlis)
+
+;-------------------------
+; Exercise 1.3 (working on...)
+;-------------------------
+(define (new-lookup id env)
+  (if (eq? (caar env) id) 
+      (cdar env)
+      (new-lookup id (cdr env))))
+
+(define (new-update! id env value)
+  (if (eq? (caar env) id)
+      (begin (set-cdr! (car env) value)
+             value)
+      (new-update! id (cdr env) value)))
+  
+(define (new-extend env names values)
+  (cons (cons names values) env))
+
+; Pluging in...
+(define old-lookup lookup)
+(set! lookup new-lookup)
+(define old-update! update!)
+(set! update! new-update!)
+(define old-extend extend)
+(set! extend new-extend)
+
+; Undo
+(set! lookup old-lookup)
+(set! update! old-update!)
+(set! extend old-extend)
+
+;-------------------------
+; Running the repl
+;-------------------------
+(repl)
+
+; Some interesting tests to do...
+;(set! fact (lambda (n) (if (eq? n 1) 1 (* n (fact (- n 1))))))
+;(fact 5)
+;(set! fib (lambda (n) (if (< n 2) 1 (+ (fib (- n 1)) (fib (- n 2))))))
+;(fib 5)
